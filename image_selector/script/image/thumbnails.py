@@ -3,7 +3,6 @@ import hashlib
 import threading
 from queue import PriorityQueue
 from PIL import Image, ImageTk, ExifTags
-import rawpy
 
 class Thumbnails:
     cache_dir = os.path.join("dist", "thumbnail_cache")  # サムネイルキャッシュのディレクトリ
@@ -12,11 +11,10 @@ class Thumbnails:
     generating = False  # generating属性を追加
 
     def __init__(self):
-        self.generating = False  # サムネイル生成中かどうかのフラグ
+        pass
 
     @staticmethod
     def generate(selector):
-        # サムネイルキャッシュディレクトリが存在しなければ作成する
         if not os.path.exists(Thumbnails.cache_dir):
             os.makedirs(Thumbnails.cache_dir)
 
@@ -25,8 +23,10 @@ class Thumbnails:
             Thumbnails.queue.put((False, image_path))  # 通常優先度のサムネイル生成をキューに追加
 
         # サムネイル生成が行われていない場合は、新しいスレッドで生成処理を開始
-        if not Thumbnails.generating:
-            threading.Thread(target=Thumbnails.process_queue, args=(selector,)).start()
+        with Thumbnails.lock:
+            if not Thumbnails.generating:
+                Thumbnails.generating = True
+                threading.Thread(target=Thumbnails.process_queue, args=(selector,)).start()
 
     @staticmethod
     def add_to_queue(image_path, priority=False):
@@ -35,7 +35,6 @@ class Thumbnails:
 
     @staticmethod
     def process_queue(selector):
-        Thumbnails.generating = True  # サムネイル生成中フラグを立てる
         while not Thumbnails.queue.empty():
             priority, image_path = Thumbnails.queue.get()  # キューから画像パスを取得
             thumbnail_path = Thumbnails.get_thumbnail_path(image_path)  # キャッシュサムネイルのパスを取得
@@ -58,8 +57,11 @@ class Thumbnails:
                 # サムネイルパスをセレクタのリストに追加
                 selector.thumbnails.append(thumbnail_path)
             selector.master.after(0, selector.update_status_label)  # ステータスラベルを更新
-        Thumbnails.generating = False  # サムネイル生成中フラグを下げる
-        selector.show_image()  # サムネイル生成後画像を表示
+
+        with Thumbnails.lock:
+            Thumbnails.generating = False  # サムネイル生成中フラグを下げる
+
+        selector.master.after(0, selector.show_image)  # サムネイル生成後画像を表示
 
     @staticmethod
     def show(selector):
