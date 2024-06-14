@@ -2,6 +2,7 @@ import os  # OS操作ユーティリティ
 import shutil  # ファイルおよびディレクトリ操作ユーティリティ
 from tkinter import Label, Button, Frame, Toplevel, Listbox, StringVar  # GUIコンポーネント
 from tkinter import ttk, filedialog  # 追加のGUIコンポーネントとファイルダイアログ
+from PIL import Image, ImageTk
 from script.ai.judge import AIJudge  # AI判定用モジュール
 from script.image.images import Images  # 画像操作用モジュール
 from script.image.thumbnails import Thumbnails  # サムネイル生成用モジュール
@@ -46,6 +47,9 @@ class Selector:
 
         self.view_discarded_button = Button(self.button_frame, text="破棄した画像を確認", command=self.view_discarded_images)
         self.view_discarded_button.pack(side="right")
+
+        self.view_keeped_button = Button(self.button_frame, text="保持した画像を確認", command=self.view_keeped_images)
+        self.view_keeped_button.pack(side="right")
 
         self.ai_judge_button = Button(self.button_frame, text="AI判定", command=self.ai_judge)
         self.ai_judge_button.pack(side="right")
@@ -180,7 +184,7 @@ class Selector:
         listbox.pack(fill="both", expand=True)
 
         for image_path in self.deleted_images:
-            listbox.insert("end", image_path)
+            listbox.insert("end", image_path)  # TODO: パス一覧じゃなくて画像一覧にしたい
 
         def restore_image():
             # 破棄された画像を復元
@@ -195,6 +199,31 @@ class Selector:
 
         restore_button = Button(discarded_window, text="復元", command=restore_image)
         restore_button.pack()
+
+    def view_keeped_images(self):
+        # 保持された画像を確認するためのウィンドウを表示
+        keeped_window = Toplevel(self.master)
+        keeped_window.title("保持された画像")
+
+        listbox = Listbox(keeped_window)
+        listbox.pack(fill="both", expand=True)
+
+        for image_path in self.keep_images:
+            listbox.insert("end", image_path) # TODO: パス一覧じゃなくて画像一覧にしたい
+
+        # 取り消しも兼ねて破棄を選択可能にする
+        def discard_image():
+            selected_index = listbox.curselection()
+            if selected_index:
+                selected_image = self.keep_images[selected_index[0]]
+                self.keep_images.remove(selected_image)
+                FileManager.save_keep_images(self.keep_images, self.keep_images_file)
+                self.images.append(selected_image)
+                self.generate_thumbnails()
+                listbox.delete(selected_index)
+
+        discard_button = Button(keeped_window, text="破棄", command=discard_image)
+        discard_button.pack()
 
     def ai_judge(self):
         # AIによる画像判定を実行
