@@ -3,6 +3,7 @@ import hashlib
 import threading
 from queue import PriorityQueue
 from PIL import Image, ImageTk, ExifTags
+from script.image.rotation import Rotation  # 画像回転用モジュール
 
 class Thumbnails:
     cache_dir = os.path.join("dist", "thumbnail_cache")  # サムネイルキャッシュのディレクトリ
@@ -42,7 +43,7 @@ class Thumbnails:
                 try:
                     # 画像を開いてサムネイルを生成
                     img = Image.open(image_path)
-                    img = Thumbnails.correct_orientation(img)  # 画像の向きを修正
+                    img = Rotation.rotate_image(img, image_path)  # 画像の向きを修正
                     img.thumbnail((150, 150))  # サムネイルサイズにリサイズ
                     img.save(thumbnail_path, "JPEG")  # サムネイルをJPEG形式で保存
                     print(f"サムネイルを生成しました: {thumbnail_path}")
@@ -73,7 +74,7 @@ class Thumbnails:
                 img = Image.open(thumbnail_path)
             else:
                 img = Image.open(image_path)
-                img = Thumbnails.correct_orientation(img)
+                img = Rotation.rotate_image(img, image_path)  # 画像の向きを修正
                 img.thumbnail((600, 400))
             img_tk = ImageTk.PhotoImage(img)
             selector.image_label.config(image=img_tk)
@@ -84,30 +85,3 @@ class Thumbnails:
         # 画像パスをMD5でハッシュ化してサムネイルのパスを生成
         hash_name = hashlib.md5(image_path.encode()).hexdigest() + ".jpg"
         return os.path.join(Thumbnails.cache_dir, hash_name)
-
-    @staticmethod
-    def correct_orientation(img):
-        try:
-            # 画像のEXIFデータからOrientationタグを取得する
-            for orientation in ExifTags.TAGS.keys():
-                if ExifTags.TAGS[orientation] == 'Orientation':
-                    break
-
-            # 画像のEXIFデータを辞書形式で取得する
-            exif = dict(img._getexif().items())
-
-            # Orientationタグに基づいて画像を回転させる
-            if exif[orientation] == 3:
-                # 180度回転
-                img = img.rotate(180, expand=True)
-            elif exif[orientation] == 6:
-                # 270度回転（時計回りに90度回転）
-                img = img.rotate(270, expand=True)
-            elif exif[orientation] == 8:
-                # 90度回転（反時計回りに90度回転）
-                img = img.rotate(90, expand=True)
-        except (AttributeError, KeyError, IndexError):
-            # EXIFデータがない場合やOrientationタグがない場合は何もしない
-            pass
-
-        return img
