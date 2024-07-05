@@ -2,7 +2,7 @@ from PIL import ExifTags
 
 class Rotation:
     @staticmethod
-    def rotate_image(img, image_path):
+    def rotate_image(img):
         try:
             # 画像のEXIFデータからOrientationタグを取得する
             for orientation in ExifTags.TAGS.keys():

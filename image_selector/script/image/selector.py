@@ -1,7 +1,8 @@
 import os  # OS操作ユーティリティ
 import shutil  # ファイルおよびディレクトリ操作ユーティリティ
-from tkinter import Label, Button, Frame, Toplevel, Listbox, StringVar  # GUIコンポーネント
+from tkinter import Label, Button, Frame, Toplevel, Listbox, StringVar, Canvas, Scrollbar, PhotoImage  # GUIコンポーネント
 from tkinter import ttk, filedialog  # 追加のGUIコンポーネントとファイルダイアログ
+import tkinter as tk
 from PIL import Image, ImageTk
 from script.ai.judge import AIJudge  # AI判定用モジュール
 from script.image.images import Images  # 画像操作用モジュール
@@ -73,6 +74,8 @@ class Selector:
         self.keep_images_file = "keep_images.json"
         self.deleted_images = FileManager.load_deleted_images(self.deleted_images_file)
         self.keep_images = FileManager.load_keep_images(self.keep_images_file)
+        self.discarded_images_tk = []  # 廃棄された画像のサムネイルを保持するリスト
+        self.keeped_images_tk = []     # 保持された画像のサムネイルを保持するリスト
 
         self.thumbnail = Thumbnails()
 
@@ -110,9 +113,9 @@ class Selector:
             self.progressbar.pack_forget()
             self.progress_label.pack_forget()
 
-    def rotate_image(self, img, image_path):
+    def rotate_image(self, img):
         # 画像を回転
-        return Rotation.rotate_image(img, image_path)
+        return Rotation.rotate_image(img)
 
     def back_image(self):
         # 前の画像を表示
@@ -175,61 +178,150 @@ class Selector:
         FileManager.save_deleted_images(self.deleted_images, self.deleted_images_file)
         print("変更を実行しました")
 
+    def restore_image(self, image_list, image_tk_list, file_path, scrollable_frame, window):
+        if image_list:
+            restored_image = image_list.pop()
+            FileManager.save_deleted_images(image_list, file_path)
+            self.images.append(restored_image)
+            self.generate_thumbnails()
+
+            # ウィジェットの更新
+            for widget in scrollable_frame.winfo_children():
+                widget.destroy()
+
+            # サムネイル画像を表示し直す
+            thumbnails = [Thumbnails.get_thumbnail_path(img) for img in reversed(image_list)]
+            image_tk_list.clear()  # ImageTkオブジェクトのリストを空にする
+
+            for idx, image_path in enumerate(thumbnails):
+                img = Image.open(image_path)
+                img.thumbnail((150, 150))
+                img_tk = ImageTk.PhotoImage(img)
+                image_tk_list.append(img_tk)
+                label = Label(scrollable_frame, image=img_tk)
+                label.grid(row=idx // 4, column=idx % 4, padx=5, pady=5)
+                label.bind("<Button-1>", lambda e, i=idx: self.on_image_click(e, i, 'discarded'))
+
+            # ウィンドウの再描画を要求する
+            window.update()
+
+
     def view_discarded_images(self):
         # 破棄された画像を確認するためのウィンドウを表示
         discarded_window = Toplevel(self.master)
         discarded_window.title("破棄された画像")
 
-        listbox = Listbox(discarded_window)
-        listbox.pack(fill="both", expand=True)
+        canvas = Canvas(discarded_window)
+        scrollbar = Scrollbar(discarded_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = Frame(canvas)
 
-        for image_path in self.deleted_images:
-            listbox.insert("end", image_path)  # TODO: パス一覧じゃなくて画像一覧にしたい
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
 
-        def restore_image():
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # サムネイル画像を表示
+        thumbnails = [Thumbnails.get_thumbnail_path(img) for img in reversed(self.deleted_images)]
+        self.discarded_images_tk = []
+
+        for idx, image_path in enumerate(thumbnails):
+            img = Image.open(image_path)
+            img.thumbnail((150, 150))
+            img_tk = ImageTk.PhotoImage(img)
+            self.discarded_images_tk.append(img_tk)
+            label = Label(scrollable_frame, image=img_tk)
+            label.grid(row=idx // 4, column=idx % 4, padx=5, pady=5)
+            label.bind("<Button-1>", lambda e, i=idx: self.on_image_click(e, i, 'discarded'))
+
+        def restore_image_wrapper():
             # 破棄された画像を復元
-            selected_index = listbox.curselection()
-            if selected_index:
-                selected_image = self.deleted_images[selected_index[0]]
-                self.deleted_images.remove(selected_image)
-                FileManager.save_deleted_images(self.deleted_images, self.deleted_images_file)
-                self.images.append(selected_image)
-                self.generate_thumbnails()
-                listbox.delete(selected_index)
+            self.restore_image(self.deleted_images, self.discarded_images_tk, self.deleted_images_file, scrollable_frame, discarded_window)
 
-        restore_button = Button(discarded_window, text="復元", command=restore_image)
+        restore_button = Button(discarded_window, text="破棄から復元", command=restore_image_wrapper)
         restore_button.pack()
+
 
     def view_keeped_images(self):
         # 保持された画像を確認するためのウィンドウを表示
         keeped_window = Toplevel(self.master)
         keeped_window.title("保持された画像")
 
-        listbox = Listbox(keeped_window)
-        listbox.pack(fill="both", expand=True)
+        canvas = Canvas(keeped_window)
+        scrollbar = Scrollbar(keeped_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = Frame(canvas)
 
-        for image_path in self.keep_images:
-            listbox.insert("end", image_path) # TODO: パス一覧じゃなくて画像一覧にしたい
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
 
-        # 取り消しも兼ねて破棄を選択可能にする
-        def discard_image():
-            selected_index = listbox.curselection()
-            if selected_index:
-                selected_image = self.keep_images[selected_index[0]]
-                self.keep_images.remove(selected_image)
-                FileManager.save_keep_images(self.keep_images, self.keep_images_file)
-                self.images.append(selected_image)
-                self.generate_thumbnails()
-                listbox.delete(selected_index)
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-        discard_button = Button(keeped_window, text="破棄", command=discard_image)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # サムネイル画像を表示
+        thumbnails = [Thumbnails.get_thumbnail_path(img) for img in reversed(self.keep_images)]
+        self.keeped_images_tk = []
+
+        for idx, image_path in enumerate(thumbnails):
+            img = Image.open(image_path)
+            img.thumbnail((150, 150))
+            img_tk = ImageTk.PhotoImage(img)
+            self.keeped_images_tk.append(img_tk)
+            label = Label(scrollable_frame, image=img_tk)
+            label.grid(row=idx // 4, column=idx % 4, padx=5, pady=5)
+            label.bind("<Button-1>", lambda e, i=idx: self.on_image_click(e, i, 'keeped'))
+
+        def restore_image():
+            # 保持された画像を復元
+            self.restore_image(self.keep_images, self.keeped_images_tk, self.keep_images_file, scrollable_frame, keeped_window)
+
+        discard_button = Button(keeped_window, text="保持から復元", command=restore_image)
         discard_button.pack()
+
+    def on_image_click(self, event, index, mode):
+        # 画像がクリックされた時の処理
+        if mode == 'discarded':
+            selected_image = self.deleted_images[-(index + 1)]
+        elif mode == 'keeped':
+            selected_image = self.keep_images[-(index + 1)]
+        else:
+            selected_image = None
+
+        if selected_image:
+            # 画像を表示する新しいウィンドウを作成
+            image_window = Toplevel(self.master)
+            image_window.title("選択された画像")
+
+            img = Image.open(selected_image)
+            img = Rotation.rotate_image(img)  # 画像の向きを修正
+            img.thumbnail((800, 800))  # 画像サイズを制限
+            img_tk = ImageTk.PhotoImage(img)
+            label = Label(image_window, image=img_tk)
+            label.image = img_tk  # 参照を保持するために必要
+            label.pack()
+
+        else:
+            print("Invalid mode or index out of range.")
 
     def ai_judge(self):
         # AIによる画像判定を実行
         AIJudge.judge(self)
 
     def finish_selection(self):
+        self.execute_changes()
         # 画像選択の処理を完了
         self.keep_images.clear()
         FileManager.save_keep_images(self.keep_images, self.keep_images_file)
@@ -237,7 +329,6 @@ class Selector:
             shutil.rmtree(Thumbnails.cache_dir)
             print(f"キャッシュディレクトリ {Thumbnails.cache_dir} をクリアしました")
         self.images.clear()
-        self.thumbnails.clear()
         self.current_image_index = 0
         self.finish_button.pack_forget()
         self.load_images()

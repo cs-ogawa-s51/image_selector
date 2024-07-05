@@ -43,7 +43,7 @@ class Thumbnails:
                 try:
                     # 画像を開いてサムネイルを生成
                     img = Image.open(image_path)
-                    img = Rotation.rotate_image(img, image_path)  # 画像の向きを修正
+                    img = Rotation.rotate_image(img)  # 画像の向きを修正
                     img.thumbnail((150, 150))  # サムネイルサイズにリサイズ
                     img.save(thumbnail_path, "JPEG")  # サムネイルをJPEG形式で保存
                     print(f"サムネイルを生成しました: {thumbnail_path}")
@@ -74,7 +74,7 @@ class Thumbnails:
                 img = Image.open(thumbnail_path)
             else:
                 img = Image.open(image_path)
-                img = Rotation.rotate_image(img, image_path)  # 画像の向きを修正
+                img = Rotation.rotate_image(img)  # 画像の向きを修正
                 img.thumbnail((600, 400))
             img_tk = ImageTk.PhotoImage(img)
             selector.image_label.config(image=img_tk)

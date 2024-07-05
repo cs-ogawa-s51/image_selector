@@ -86,7 +86,7 @@ class Images:
                     img = Image.open(image_path)
 
                 # 画像の向きを修正
-                img = selector.rotate_image(img, image_path)
+                img = selector.rotate_image(img)
                 img.thumbnail((600, 600))  # サムネイルサイズにリサイズ
                 photo = ImageTk.PhotoImage(img)
                 # 画像ラベルに表示
