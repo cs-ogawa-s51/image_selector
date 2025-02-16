@@ -1,11 +1,14 @@
 import os
 import threading
+import io  # ioモジュールのインポート
 from tkinter import filedialog  # ファイル選択ダイアログのためのモジュール
 from PIL import Image, ImageTk, ExifTags  # 画像操作とEXIFデータの処理のためのモジュール
 import rawpy  # RAW画像の処理のためのモジュール
 from datetime import datetime  # 日付と時間の処理のためのモジュール
 
 class Images:
+    cache = {}  # キャッシュ用の辞書
+
     @staticmethod
     def load(selector):
         # フォルダ選択ダイアログを開いて選択されたフォルダを取得
@@ -30,7 +33,7 @@ class Images:
 
         for index, file in enumerate(files):
             # 対応する画像形式をチェック
-            if file.lower().endswith(("jpg", "jpeg", "png", "cr2")):
+            if file.lower().endswith(("jpg", "jpeg", "png", "cr2", "cr3")):
                 image_path = os.path.join(folder_selected, file)
                 if os.path.isfile(image_path):
                     # 破棄リストと保持リストに含まれていない場合のみリストに追加
@@ -76,24 +79,60 @@ class Images:
         if selector.images:
             image_path = selector.images[selector.current_image_index]
             print(f"画像を表示中: {image_path}")
-            try:
-                # CR2ファイルの場合
-                if image_path.lower().endswith("cr2"):
-                    with rawpy.imread(image_path) as raw:
-                        rgb = raw.postprocess()
-                        img = Image.fromarray(rgb)
-                else:
-                    img = Image.open(image_path)
 
-                # 画像の向きを修正
-                img = selector.rotate_image(img)
-                img.thumbnail((600, 600))  # サムネイルサイズにリサイズ
-                photo = ImageTk.PhotoImage(img)
-                # 画像ラベルに表示
+            # キャッシュの確認
+            if image_path in Images.cache:
+                print(f"キャッシュを使用: {image_path}")
+                photo = Images.cache[image_path]
                 selector.image_label.config(image=photo)
                 selector.image_label.image = photo
+                return
+
+            try:
+                if image_path.lower().endswith(("cr2", "cr3")):
+                    # RAWファイルの場合
+                    # 非同期でRAW画像を読み込む
+                    threading.Thread(target=Images._load_raw_image, args=(selector, image_path)).start()
+                else:
+                    img = Image.open(image_path)
+                    # 画像の向きを修正
+                    img = selector.rotate_image(img)
+                    img.thumbnail((840, 840))  # サムネイルサイズにリサイズ
+                    photo = ImageTk.PhotoImage(img)
+                    # キャッシュに追加
+                    Images.cache[image_path] = photo
+                    # 画像ラベルに表示
+                    selector.image_label.config(image=photo)
+                    selector.image_label.image = photo
             except Exception as e:
                 # 画像の読み込みに失敗した場合のエラーメッセージ
                 print(f"画像の読み込みに失敗しました {image_path}: {e}")
                 selector.image_label.config(text=f"画像の読み込みに失敗しました: {image_path}")
 
+    @staticmethod
+    def _load_raw_image(selector, image_path):
+        try:
+            with rawpy.imread(image_path) as raw:
+                # サムネイルの抽出
+                thumb = raw.extract_thumb()
+                if thumb.format == rawpy.ThumbFormat.JPEG:
+                    img = Image.open(io.BytesIO(thumb.data))
+                elif thumb.format == rawpy.ThumbFormat.BITMAP:
+                    img = Image.fromarray(thumb.data)
+                else:
+                    # サムネイルがない場合はフルサイズの画像を処理
+                    rgb = raw.postprocess()
+                    img = Image.fromarray(rgb)
+
+                # 画像の向きを修正
+                img = selector.rotate_image(img)
+                img.thumbnail((840, 840))  # サムネイルサイズにリサイズ
+                photo = ImageTk.PhotoImage(img)
+                # キャッシュに追加
+                Images.cache[image_path] = photo
+                # 画像ラベルに表示
+                selector.image_label.config(image=photo)
+                selector.image_label.image = photo
+        except Exception as e:
+            print(f"RAW画像の読み込みに失敗しました {image_path}: {e}")
+            selector.image_label.config(text=f"RAW画像の読み込みに失敗しました: {image_path}")
