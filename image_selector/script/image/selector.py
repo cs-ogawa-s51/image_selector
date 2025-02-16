@@ -15,19 +15,27 @@ class Selector:
         self.master = master
         self.master.title("画像選択")
 
+        # ボタンの高さを取得してウィンドウの高さを計算
         button_height = Button(master, text="サンプル").winfo_reqheight()
-        window_height = 600 + button_height + 150
-        self.master.geometry(f"600x{window_height}")
+        window_height = 840 + button_height + 100
+        window_width = 840 + 150  # 横幅を指定することで、横幅の変更も行う
+        self.master.geometry(f"{window_width}x{window_height}")
 
+        # ウィンドウサイズを更新して反映
+        self.master.update()
+
+        # メイン画面で画像を表示するラベルを追加
         self.image_label = Label(self.master)
         self.image_label.pack(fill="both", expand=True)
 
+        # ステータスバーを追加
         self.status_frame = Frame(self.master)
         self.status_frame.pack(fill="x", side="top")
 
         self.status_label = Label(self.status_frame, text="")
         self.status_label.pack(side="left")
 
+        # ボタンフレームの追加
         self.button_frame = Frame(self.master)
         self.button_frame.pack(fill="x", side="bottom")
 
@@ -38,13 +46,15 @@ class Selector:
         self.next_button.pack(side="right")
 
         self.keep_button = Button(self.button_frame, text="保持", command=self.keep_image)
+        self.keep_button.config(width=10)
         self.keep_button.pack(side="right")
 
         self.discard_button = Button(self.button_frame, text="破棄", command=self.discard_image)
+        self.discard_button.config(width=10)
         self.discard_button.pack(side="right")
 
-        self.execute_button = Button(self.button_frame, text="実行", command=self.execute_changes)
-        self.execute_button.pack(side="right")
+        self.ai_judge_button = Button(self.button_frame, text="AI判定", command=self.ai_judge)
+        self.ai_judge_button.pack(side="right")
 
         self.view_discarded_button = Button(self.button_frame, text="破棄した画像を確認", command=self.view_discarded_images)
         self.view_discarded_button.pack(side="right")
@@ -52,8 +62,8 @@ class Selector:
         self.view_keeped_button = Button(self.button_frame, text="保持した画像を確認", command=self.view_keeped_images)
         self.view_keeped_button.pack(side="right")
 
-        self.ai_judge_button = Button(self.button_frame, text="AI判定", command=self.ai_judge)
-        self.ai_judge_button.pack(side="right")
+        self.execute_button = Button(self.button_frame, text="実行", command=self.execute_changes)
+        self.execute_button.pack(side="right")
 
         self.progress_var = StringVar()
         self.progress_label = Label(self.master, textvariable=self.progress_var)
@@ -307,7 +317,7 @@ class Selector:
 
             img = Image.open(selected_image)
             img = Rotation.rotate_image(img)  # 画像の向きを修正
-            img.thumbnail((800, 800))  # 画像サイズを制限
+            img.thumbnail((900, 900))  # 画像サイズを制限
             img_tk = ImageTk.PhotoImage(img)
             label = Label(image_window, image=img_tk)
             label.image = img_tk  # 参照を保持するために必要
